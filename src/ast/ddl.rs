@@ -13,8 +13,8 @@
 //! AST types specific to CREATE/ALTER variants of [Statement]
 //! (commonly referred to as Data Definition Language, or DDL)
 use super::{display_comma_separated, DataType, Expr, Ident, ObjectName};
-use crate::ast::display_separated;
-use crate::tokenizer::Token;
+use super::display_separated;
+use super::super::tokenizer::Token;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::fmt;

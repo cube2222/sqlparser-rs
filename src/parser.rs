@@ -54,7 +54,7 @@ pub enum IsLateral {
     Lateral,
     NotLateral,
 }
-use crate::ast::Statement::CreateVirtualTable;
+use super::ast::Statement::CreateVirtualTable;
 use IsLateral::*;
 
 impl From<TokenizerError> for ParserError {
