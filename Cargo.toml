@@ -16,7 +16,7 @@ edition = "2018"
 
 [lib]
 name = "sqlparser"
-path = "src/lib.rs"
+path = "src/mod.rs"
 
 [features]
 # Enable JSON output in the `cli` example:
