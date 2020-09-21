@@ -130,6 +130,8 @@ pub struct Select {
     pub selection: Option<Expr>,
     /// GROUP BY
     pub group_by: Vec<Expr>,
+    /// TRIGGER
+    pub trigger: Vec<Trigger>,
     /// HAVING
     pub having: Option<Expr>,
 }
@@ -150,10 +152,32 @@ impl fmt::Display for Select {
         if !self.group_by.is_empty() {
             write!(f, " GROUP BY {}", display_comma_separated(&self.group_by))?;
         }
+        if !self.trigger.is_empty() {
+            write!(f, " TRIGGER {}", display_comma_separated(&self.trigger))?;
+        }
         if let Some(ref having) = self.having {
             write!(f, " HAVING {}", having)?;
         }
         Ok(())
+    }
+}
+
+/// Trigger
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Trigger {
+    Counting(u64),
+    Watermark,
+    Delay(Value),
+}
+
+impl fmt::Display for Trigger {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Trigger::Counting(n) => write!(f, "COUNTING {}", n),
+            Trigger::Watermark => write!(f, "ON WATERMARK"),
+            Trigger::Delay(interval) => write!(f, "AFTER DELAY {}", interval),
+        }
     }
 }
 

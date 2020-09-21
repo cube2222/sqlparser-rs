@@ -578,17 +578,18 @@ impl<'a> Parser<'a> {
         // don't currently try to parse it. (The sign can instead be included
         // inside the value string.)
 
-        // The first token in an interval is a string literal which specifies
+        // The first token in an interval is a number literal which specifies
         // the duration of the interval.
-        let value = self.parse_literal_string()?;
+        if let Value::Number(str_value) = self.parse_number_value()? {
+            let value: i64 = str_value.as_str().parse().map_err(|err| ParserError::ParserError(format!("{}", err)))?;
 
-        // Following the string literal is a qualifier which indicates the units
-        // of the duration specified in the string literal.
-        //
-        // Note that PostgreSQL allows omitting the qualifier, so we provide
-        // this more general implemenation.
-        let leading_field = match self.peek_token() {
-            Token::Word(kw)
+            // Following the string literal is a qualifier which indicates the units
+            // of the duration specified in the string literal.
+            //
+            // Note that PostgreSQL allows omitting the qualifier, so we provide
+            // this more general implemenation.
+            let leading_field = match self.peek_token() {
+                Token::Word(kw)
                 if [
                     Keyword::YEAR,
                     Keyword::MONTH,
@@ -597,46 +598,49 @@ impl<'a> Parser<'a> {
                     Keyword::MINUTE,
                     Keyword::SECOND,
                 ]
-                .iter()
-                .any(|d| kw.keyword == *d) =>
-            {
-                Some(self.parse_date_time_field()?)
-            }
-            _ => None,
-        };
-
-        let (leading_precision, last_field, fsec_precision) =
-            if leading_field == Some(DateTimeField::Second) {
-                // SQL mandates special syntax for `SECOND TO SECOND` literals.
-                // Instead of
-                //     `SECOND [(<leading precision>)] TO SECOND[(<fractional seconds precision>)]`
-                // one must use the special format:
-                //     `SECOND [( <leading precision> [ , <fractional seconds precision>] )]`
-                let last_field = None;
-                let (leading_precision, fsec_precision) = self.parse_optional_precision_scale()?;
-                (leading_precision, last_field, fsec_precision)
-            } else {
-                let leading_precision = self.parse_optional_precision()?;
-                if self.parse_keyword(Keyword::TO) {
-                    let last_field = Some(self.parse_date_time_field()?);
-                    let fsec_precision = if last_field == Some(DateTimeField::Second) {
-                        self.parse_optional_precision()?
-                    } else {
-                        None
-                    };
-                    (leading_precision, last_field, fsec_precision)
-                } else {
-                    (leading_precision, None, None)
-                }
+                    .iter()
+                    .any(|d| kw.keyword == *d) =>
+                    {
+                        Some(self.parse_date_time_field()?)
+                    }
+                _ => None,
             };
 
-        Ok(Expr::Value(Value::Interval {
-            value,
-            leading_field,
-            leading_precision,
-            last_field,
-            fractional_seconds_precision: fsec_precision,
-        }))
+            let (leading_precision, last_field, fsec_precision) =
+                if leading_field == Some(DateTimeField::Second) {
+                    // SQL mandates special syntax for `SECOND TO SECOND` literals.
+                    // Instead of
+                    //     `SECOND [(<leading precision>)] TO SECOND[(<fractional seconds precision>)]`
+                    // one must use the special format:
+                    //     `SECOND [( <leading precision> [ , <fractional seconds precision>] )]`
+                    let last_field = None;
+                    let (leading_precision, fsec_precision) = self.parse_optional_precision_scale()?;
+                    (leading_precision, last_field, fsec_precision)
+                } else {
+                    let leading_precision = self.parse_optional_precision()?;
+                    if self.parse_keyword(Keyword::TO) {
+                        let last_field = Some(self.parse_date_time_field()?);
+                        let fsec_precision = if last_field == Some(DateTimeField::Second) {
+                            self.parse_optional_precision()?
+                        } else {
+                            None
+                        };
+                        (leading_precision, last_field, fsec_precision)
+                    } else {
+                        (leading_precision, None, None)
+                    }
+                };
+
+            Ok(Expr::Value(Value::Interval {
+                value,
+                leading_field,
+                leading_precision,
+                last_field,
+                fractional_seconds_precision: fsec_precision,
+            }))
+        } else {
+            self.expected("number literal", self.peek_token())
+        }
     }
 
     /// Parse an operator following an expression
@@ -1909,6 +1913,12 @@ impl<'a> Parser<'a> {
             vec![]
         };
 
+        let trigger = if self.parse_keyword(Keyword::TRIGGER) {
+            self.parse_comma_separated(Parser::parse_trigger)?
+        } else {
+            vec![]
+        };
+
         let having = if self.parse_keyword(Keyword::HAVING) {
             Some(self.parse_expr()?)
         } else {
@@ -1922,8 +1932,30 @@ impl<'a> Parser<'a> {
             from,
             selection,
             group_by,
+            trigger,
             having,
         })
+    }
+
+    pub fn parse_trigger(&mut self) -> Result<Trigger, ParserError> {
+        if self.parse_keyword(Keyword::COUNTING) {
+            if let Value::Number(counting) = self.parse_number_value()? {
+                let count = counting.as_str().parse().map_err(|err| ParserError::ParserError(format!("{}", err)))?;
+                Ok(Trigger::Counting(count))
+            } else {
+                self.expected("number", self.peek_token())
+            }
+        } else if self.parse_keywords(&[Keyword::ON, Keyword::WATERMARK]) {
+            Ok(Trigger::Watermark)
+        } else if self.parse_keywords(&[Keyword::AFTER, Keyword::DELAY, Keyword::INTERVAL]) {
+            if let Expr::Value(interval) = self.parse_literal_interval()? {
+                Ok(Trigger::Delay(interval))
+            } else {
+                self.expected("interval literal", self.peek_token())
+            }
+        } else {
+            return self.expected("COUNTING, ON WATERMARK or AFTER DELAY INTERVAL", self.peek_token());
+        }
     }
 
     pub fn parse_set(&mut self) -> Result<Statement, ParserError> {
