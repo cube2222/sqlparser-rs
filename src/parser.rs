@@ -551,9 +551,13 @@ impl<'a> Parser<'a> {
                 Keyword::YEAR => Ok(DateTimeField::Year),
                 Keyword::MONTH => Ok(DateTimeField::Month),
                 Keyword::DAY => Ok(DateTimeField::Day),
+                Keyword::DAYS => Ok(DateTimeField::Day),
                 Keyword::HOUR => Ok(DateTimeField::Hour),
+                Keyword::HOURS => Ok(DateTimeField::Hour),
                 Keyword::MINUTE => Ok(DateTimeField::Minute),
+                Keyword::MINUTES => Ok(DateTimeField::Minute),
                 Keyword::SECOND => Ok(DateTimeField::Second),
+                Keyword::SECONDS => Ok(DateTimeField::Second),
                 _ => self.expected("date/time field", Token::Word(w))?,
             },
             unexpected => self.expected("date/time field", unexpected),
@@ -594,9 +598,13 @@ impl<'a> Parser<'a> {
                     Keyword::YEAR,
                     Keyword::MONTH,
                     Keyword::DAY,
+                    Keyword::DAYS,
                     Keyword::HOUR,
+                    Keyword::HOURS,
                     Keyword::MINUTE,
+                    Keyword::MINUTES,
                     Keyword::SECOND,
+                    Keyword::SECONDS,
                 ]
                     .iter()
                     .any(|d| kw.keyword == *d) =>
